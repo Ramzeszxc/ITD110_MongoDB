@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Management System</title>
+    <link rel="stylesheet" href="css/styles.css">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body>
+    <div id="app" class="container">
+        <header class="app-header">
+            <i class="fas fa-graduation-cap header-icon"></i>
+            <h1>Student Management System</h1>
+        </header>
+
+        <div class="card form-container">
+            <div class="card-header">
+                <h2>{{ isEditing ? 'Edit Student Record' : 'Enroll New Student' }}</h2>
+                <span class="badge">{{ isEditing ? 'Editing Mode' : 'Registration' }}</span>
+            </div>
+            
+            <form @submit.prevent="handleSubmit">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="name">Full Name</label>
+                        <div class="input-wrapper">
+                            <i class="fas fa-user"></i>
+                            <input type="text" id="name" v-model="formData.name" placeholder="e.g. Jane Doe" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Email Address</label>
+                        <div class="input-wrapper">
+                            <i class="fas fa-envelope"></i>
+                            <input type="email" id="email" v-model="formData.email" placeholder="jane@university.edu" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="course">Degree / Course</label>
+                        <div class="input-wrapper">
+                            <i class="fas fa-book"></i>
+                            <input type="text" id="course" v-model="formData.course" placeholder="e.g. BS Computer Science" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="allowance">Monthly Allowance (₱)</label>
+                        <div class="input-wrapper">
+                            <i class="fas fa-coins"></i>
+                            <input type="number" id="allowance" v-model.number="formData.allowance" placeholder="0.00" required min="0">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">
+                        <i :class="isEditing ? 'fas fa-save' : 'fas fa-user-plus'"></i>
+                        {{ isEditing ? 'Update Record' : 'Add Student' }}
+                    </button>
+                    <button type="button" class="btn btn-secondary" v-if="isEditing" @click="resetForm">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="card table-container">
+            <div class="card-header border-bottom">
+                <h2>Enrolled Students</h2>
+                <div class="student-count">{{ students.length }} Total</div>
+            </div>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Contact</th>
+                            <th>Course</th>
+                            <th>Monthly Base</th>
+                            <th>Annual Projection</th>
+                            <th class="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="student in students" :key="student._id">
+                            <td class="font-medium">{{ student.name }}</td>
+                            <td class="text-gray">{{ student.email }}</td>
+                            <td><span class="tag">{{ student.course }}</span></td>
+                            <td class="font-medium text-green">₱{{ student.allowance?.toLocaleString() || 0 }}</td>
+                            <td class="font-medium text-blue">₱{{ student.yearlyAllowance?.toLocaleString() || 0 }}</td>
+                            <td class="actions-cell">
+                                <button class="btn-icon edit" @click="editStudent(student)" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn-icon delete" @click="deleteStudent(student._id)" title="Delete">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="empty-state" v-if="students.length === 0">
+                    <i class="fas fa-folder-open"></i>
+                    <p>No students enrolled yet.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const API_URL = 'https://fictional-space-goggles-r4jpvgxx9gr35vpx-5001.app.github.dev/api/students';
+                
+                const students = ref([]);
+                const isEditing = ref(false);
+                const currentStudentId = ref(null);
+                const formData = ref({
+                    name: '',
+                    email: '',
+                    course: '',
+                    allowance: ''
+                });
+
+                const fetchStudents = async () => {
+                    try {
+                        const response = await fetch(API_URL);
+                        students.value = await response.json();
+                    } catch (error) {
+                        console.error('Error fetching students:', error);
+                    }
+                };
+
+                const handleSubmit = async () => {
+                    try {
+                        const method = isEditing.value ? 'PUT' : 'POST';
+                        const url = isEditing.value ? `${API_URL}/${currentStudentId.value}` : API_URL;
+
+                        await fetch(url, {
+                            method: method,
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(formData.value)
+                        });
+
+                        resetForm();
+                        fetchStudents();
+                    } catch (error) {
+                        console.error('Error saving student:', error);
+                    }
+                };
+
+                const editStudent = (student) => {
+                    isEditing.value = true;
+                    currentStudentId.value = student._id;
+                    formData.value = {
+                        name: student.name,
+                        email: student.email,
+                        course: student.course,
+                        allowance: student.allowance
+                    };
+                };
+
+                const deleteStudent = async (id) => {
+                    if (!confirm('Are you sure you want to remove this record?')) return;
+                    
+                    try {
+                        await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+                        fetchStudents();
+                    } catch (error) {
+                        console.error('Error deleting student:', error);
+                    }
+                };
+
+                const resetForm = () => {
+                    isEditing.value = false;
+                    currentStudentId.value = null;
+                    formData.value = { name: '', email: '', course: '', allowance: '' };
+                };
+
+                onMounted(() => fetchStudents());
+
+                return { students, isEditing, formData, handleSubmit, editStudent, deleteStudent, resetForm };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
